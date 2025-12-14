@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import os
 import sys
+import platform
 from collections import deque
 from ultralytics import YOLO
 
@@ -58,16 +59,19 @@ except Exception as e:
     sys.exit(1)
 
 def calculate_dynamics(pos_history, radius_history):
-    if len(pos_history) < VELOCITY_CALC_FRAMES or len(radius_history) < VELOCITY_CALC_FRAMES:
+    # Need at least 2*VELOCITY_CALC_FRAMES to avoid overlap in growth rate calculation
+    min_frames = VELOCITY_CALC_FRAMES * 2
+    if len(pos_history) < VELOCITY_CALC_FRAMES or len(radius_history) < min_frames:
         return (0, 0), 0
     
     # Calculate velocity using more frames for stability
     # Note: deque uses appendleft, so index 0 is newest, higher indices are older
-    # Velocity = (older_pos - newer_pos) to get correct direction
-    dx = int(np.mean([pos_history[i][0] - pos_history[i-1][0] for i in range(1, VELOCITY_CALC_FRAMES)]))
-    dy = int(np.mean([pos_history[i][1] - pos_history[i-1][1] for i in range(1, VELOCITY_CALC_FRAMES)]))
+    # Velocity = (newer_pos - older_pos), i.e., pos_history[i-1] - pos_history[i]
+    dx = int(np.mean([pos_history[i-1][0] - pos_history[i][0] for i in range(1, VELOCITY_CALC_FRAMES)]))
+    dy = int(np.mean([pos_history[i-1][1] - pos_history[i][1] for i in range(1, VELOCITY_CALC_FRAMES)]))
 
     # Calculate growth rate: recent (newest at index 0) vs old (oldest at end)
+    # Ensure no overlap by requiring 2*VELOCITY_CALC_FRAMES
     r_now = np.mean(list(radius_history)[:VELOCITY_CALC_FRAMES])  # Most recent frames (index 0 to VELOCITY_CALC_FRAMES-1)
     r_old = np.mean(list(radius_history)[-VELOCITY_CALC_FRAMES:])  # Oldest frames (last VELOCITY_CALC_FRAMES)
     growth_rate = r_now - r_old 
@@ -88,7 +92,6 @@ def main():
     # Try to open camera - use CAP_DSHOW on Windows, default on other platforms
     camera_index = int(os.environ.get('CAMERA_INDEX', 0))
     try:
-        import platform
         if platform.system() == 'Windows':
             cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
         else:
