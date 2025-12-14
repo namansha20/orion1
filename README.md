@@ -361,13 +361,23 @@ Run the system with different scenarios:
 # Test all demo scenarios
 python test_demos.py
 
-# Test camera detection API (requires server running)
+# Run AADES real-time camera detection (YOLO-based)
+export YOLO_MODEL_PATH="/path/to/your/model/best.pt"
 python test_camera_api.py
 
 # Run individual layer tests
 python orion_eye.py
 ```
 
+### Real-Time Camera Detection (AADES)
+The `test_camera_api.py` now performs real-time YOLO-based object detection:
+- Set `YOLO_MODEL_PATH` environment variable to your model file
+- Uses stabilized tracking with heavy smoothing
+- Displays trajectory predictions and collision warnings
+- Press 'q' to quit
+- See [CAMERA_DETECTION_GUIDE.md](CAMERA_DETECTION_GUIDE.md) for detailed configuration
+
+### Webcam Browser Interface
 To test the webcam interface:
 1. Start the server: `python app.py`
 2. Open browser: `http://localhost:5000`
