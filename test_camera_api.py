@@ -96,7 +96,8 @@ def main():
             cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
         else:
             cap = cv2.VideoCapture(camera_index)
-    except Exception:
+    except (cv2.error, OSError) as e:
+        print(f"⚠️  Warning: Could not use platform-specific camera backend: {e}")
         cap = cv2.VideoCapture(camera_index)
     
     if not cap.isOpened():
@@ -132,6 +133,12 @@ def main():
         for r in results:
             boxes = r.boxes
             for box in boxes:
+                # Validate box data structure
+                if box.conf is None or len(box.conf) == 0:
+                    continue
+                if box.xyxy is None or len(box.xyxy) == 0:
+                    continue
+                    
                 confidence = float(box.conf[0])
                 if confidence < CONFIDENCE_MIN: continue
 
@@ -203,8 +210,6 @@ def main():
 
         # --- 3. LOGIC & HUD ---
         if target_found:
-            direction_label = get_direction_label(dx, dy)
-            
             pred_x = int(x + (dx * PREDICTION_FRAMES))
             pred_y = int(y + (dy * PREDICTION_FRAMES))
             dist_future = np.linalg.norm(np.array((pred_x, pred_y)) - np.array((center_x, center_y)))
