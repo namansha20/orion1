@@ -271,6 +271,57 @@ ORION-EYE includes comprehensive LEO environmental impact assessment:
 - **Historical Data Analysis:** Learn from past encounters
 - **Real Sensor Integration:** Connect to actual spacecraft sensors
 
+## 📹 Real-Time Camera Object Detection
+
+ORION now includes **AADES** (Autonomous Avoidance and Detection System) - a real-time camera-based object detection and tracking system.
+
+### Features
+- **Real-time object tracking** with OpenCV
+- **Red object detection** with configurable HSV color ranges
+- **3D motion analysis** (X, Y, Z axes)
+- **Collision prediction** with visual warnings
+- **Trajectory visualization** with trailing effects
+- **HUD interface** with status indicators
+- **Web-based live camera preview** integrated in the dashboard
+
+### Running Camera Detection
+
+**Option 1: Integrated Web Dashboard (Recommended)**
+
+Access the live camera detection preview directly from the web dashboard:
+
+1. Start the web application:
+```bash
+python app.py
+```
+
+2. Open your browser and navigate to `http://localhost:5000`
+
+3. Click the **"📹 Start Live Camera Detection"** button
+
+4. The camera preview will appear with real-time debris detection overlay
+
+**Option 2: Standalone Camera Application**
+
+```bash
+# Run the camera detection system
+python camera_detection.py
+```
+
+**Controls:**
+- Press `q` to quit the application
+
+**Configuration:**
+You can adjust detection parameters in `camera_detection.py`:
+- `LOWER_RED1`, `UPPER_RED1`, `LOWER_RED2`, `UPPER_RED2`: HSV color ranges for red object detection
+- `BUFFER_SIZE`: Length of the trajectory trail (default: 32)
+- `COLLISION_ZONE`: Radius of collision detection zone in pixels (default: 80)
+- `GROWTH_THRESHOLD`: Sensitivity for approaching/receding detection (default: 0.5)
+
+**Requirements:**
+- Webcam or camera device
+- OpenCV Python (opencv-python)
+
 ## 🧪 Testing
 
 Run the system with different scenarios:
@@ -281,6 +332,9 @@ python orion_eye.py
 
 # Test web server
 python app.py
+
+# Test camera detection
+python camera_detection.py
 ```
 
 ## 📝 License
@@ -313,5 +367,4 @@ This project is designed for educational and hackathon purposes.
 
 **Built for ORION by Aerospace Engineering Team**
 
-*"Simulated Intelligence for Real Safety"*#   o r i o n 1  
- 
+*"Simulated Intelligence for Real Safety"*
