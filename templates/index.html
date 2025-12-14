@@ -168,12 +168,94 @@
             overflow: hidden;
         }
         
-        #space-canvas {
+        #webcam-container {
+            position: relative;
             width: 100%;
-            height: 400px;
+            height: 500px;
+            background: #000;
             border-radius: 8px;
-            background: radial-gradient(circle at center, #0a0e27 0%, #000000 100%);
+            overflow: hidden;
+            border: 2px solid #00e5ff;
+            box-shadow: 0 0 20px rgba(0, 229, 255, 0.5);
         }
+        
+        #webcam-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: none;
+        }
+        
+        #webcam-video.active {
+            display: block;
+        }
+        
+        #overlay-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        
+        .hud-reticle {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #00e5ff;
+        }
+        
+        .hud-reticle.top-left {
+            top: 10px;
+            left: 10px;
+            border-right: none;
+            border-bottom: none;
+        }
+        
+        .hud-reticle.top-right {
+            top: 10px;
+            right: 10px;
+            border-left: none;
+            border-bottom: none;
+        }
+        
+        .hud-reticle.bottom-left {
+            bottom: 10px;
+            left: 10px;
+            border-right: none;
+            border-top: none;
+        }
+        
+        .hud-reticle.bottom-right {
+            bottom: 10px;
+            right: 10px;
+            border-left: none;
+            border-top: none;
+        }
+        
+        .webcam-status {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 229, 255, 0.2);
+            border: 1px solid #00e5ff;
+            padding: 10px 20px;
+            border-radius: 5px;
+            color: #00e5ff;
+            font-weight: bold;
+            text-transform: uppercase;
+            z-index: 10;
+        }
+        
+        .btn-webcam {
+            background: linear-gradient(135deg, #00bcd4 0%, #00e5ff 100%);
+            color: white;
+            margin-bottom: 20px;
+        }
+        
+
         
         .object-table {
             width: 100%;
@@ -404,8 +486,19 @@
             
             <!-- Visualization Panel -->
             <div class="panel visualization">
-                <h2>🌌 3D Space Environment</h2>
-                <canvas id="space-canvas"></canvas>
+                <h2>🎥 Real-Time Camera Detection</h2>
+                <button class="btn btn-webcam" id="start-webcam-btn" onclick="toggleWebcam()">
+                    📹 Start Webcam Detection
+                </button>
+                <div id="webcam-container">
+                    <div class="webcam-status" id="webcam-status">Camera Inactive</div>
+                    <video id="webcam-video" autoplay playsinline></video>
+                    <canvas id="overlay-canvas"></canvas>
+                    <div class="hud-reticle top-left"></div>
+                    <div class="hud-reticle top-right"></div>
+                    <div class="hud-reticle bottom-left"></div>
+                    <div class="hud-reticle bottom-right"></div>
+                </div>
             </div>
             
             <!-- Maneuver Details Panel -->
@@ -585,102 +678,344 @@
             `;
             document.getElementById('leo-impact').innerHTML = leoHtml;
             
-            // Render 3D visualization
-            render3DVisualization(data.dashboard_data.visualization);
+            // Note: 3D visualization removed in favor of webcam feed
+            // Original simulation data still available in dashboard panels
         }
         
-        function render3DVisualization(vizData) {
-            const canvas = document.getElementById('space-canvas');
+
+        // Webcam and Detection System - Constants
+        const DETECTION_INTERVAL_MS = 100; // 100ms interval (10 Hz detection rate)
+        const DETECTION_SIZE_INCREMENT = 0.003; // Growth rate for approaching objects
+        const DETECTION_SIZE_MAX = 0.4; // Maximum detection box size
+        const DETECTION_SIZE_RESET = 0.1; // Reset size after reaching max
+        const MAX_DISTANCE_KM = 50; // Maximum simulated distance in kilometers
+        const DASHBOARD_UPDATE_FRAMES = 30; // Update dashboard every N frames (~1 second at 10fps)
+        
+        // Webcam state variables
+        let webcamStream = null;
+        let detectionInterval = null;
+        let isWebcamActive = false;
+        let mockDetections = [];
+        let detectionFrameCount = 0;
+        
+        async function toggleWebcam() {
+            const video = document.getElementById('webcam-video');
+            const canvas = document.getElementById('overlay-canvas');
+            const status = document.getElementById('webcam-status');
+            const btn = document.getElementById('start-webcam-btn');
+            
+            if (!isWebcamActive) {
+                try {
+                    // Request webcam access
+                    webcamStream = await navigator.mediaDevices.getUserMedia({
+                        video: { width: 1280, height: 720 },
+                        audio: false
+                    });
+                    
+                    video.srcObject = webcamStream;
+                    video.classList.add('active');
+                    
+                    // Setup canvas overlay
+                    canvas.width = video.offsetWidth;
+                    canvas.height = video.offsetHeight;
+                    
+                    status.textContent = 'Camera Active - Scanning for Debris';
+                    status.style.background = 'rgba(0, 229, 255, 0.3)';
+                    btn.textContent = '⏸️ Stop Webcam Detection';
+                    
+                    isWebcamActive = true;
+                    
+                    // Start detection loop
+                    runDetectionLoop(webcamStream);
+                } catch (error) {
+                    console.error('Error accessing webcam:', error);
+                    status.textContent = 'Camera Access Denied';
+                    status.style.background = 'rgba(255, 0, 0, 0.3)';
+                    alert('Unable to access webcam. Please grant camera permissions.');
+                }
+            } else {
+                // Stop webcam
+                if (webcamStream) {
+                    webcamStream.getTracks().forEach(track => track.stop());
+                    webcamStream = null;
+                }
+                
+                if (detectionInterval) {
+                    clearInterval(detectionInterval);
+                    detectionInterval = null;
+                }
+                
+                video.classList.remove('active');
+                video.srcObject = null;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                
+                status.textContent = 'Camera Inactive';
+                status.style.background = 'rgba(0, 229, 255, 0.2)';
+                btn.textContent = '📹 Start Webcam Detection';
+                
+                isWebcamActive = false;
+                mockDetections = [];
+            }
+        }
+        
+        function runDetectionLoop(videoStream) {
+            // Placeholder function for YOLO/TensorFlow.js integration
+            // This will be replaced with actual ML model later
+            
+            const canvas = document.getElementById('overlay-canvas');
+            const video = document.getElementById('webcam-video');
+            
+            // Initialize mock detection data
+            mockDetections = [
+                {
+                    id: 'DEBRIS_001',
+                    type: 'debris',
+                    x: 0.3,
+                    y: 0.4,
+                    size: 0.1,
+                    velocity: { x: 0.002, y: 0.001 },
+                    confidence: 0.92
+                }
+            ];
+            
+            detectionInterval = setInterval(() => {
+                // Safety check: stop processing if webcam is no longer active
+                if (!isWebcamActive) return;
+                
+                detectionFrameCount++;
+                
+                // Update mock detections (simulate object moving closer)
+                mockDetections.forEach(detection => {
+                    // Simulate object approaching (growing box)
+                    detection.size += DETECTION_SIZE_INCREMENT;
+                    if (detection.size > DETECTION_SIZE_MAX) detection.size = DETECTION_SIZE_RESET;
+                    
+                    // Simulate slight movement
+                    detection.x += detection.velocity.x;
+                    detection.y += detection.velocity.y;
+                    
+                    // Keep within bounds
+                    if (detection.x < 0.1 || detection.x > 0.8) detection.velocity.x *= -1;
+                    if (detection.y < 0.1 || detection.y > 0.8) detection.velocity.y *= -1;
+                });
+                
+                // Draw detections on overlay canvas
+                drawDetections(canvas, mockDetections);
+                
+                // Update dashboard data periodically
+                if (detectionFrameCount % DASHBOARD_UPDATE_FRAMES === 0) {
+                    updateDashboardFromDetections(mockDetections);
+                }
+            }, DETECTION_INTERVAL_MS);
+        }
+        
+        function drawDetections(canvas, detections) {
             const ctx = canvas.getContext('2d');
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
+            const video = document.getElementById('webcam-video');
             
-            // Clear canvas
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw stars
-            for (let i = 0; i < 100; i++) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
-                ctx.fillRect(
-                    Math.random() * canvas.width,
-                    Math.random() * canvas.height,
-                    2, 2
-                );
+            // Resize canvas to match video dimensions
+            if (canvas.width !== video.offsetWidth || canvas.height !== video.offsetHeight) {
+                canvas.width = video.offsetWidth;
+                canvas.height = video.offsetHeight;
             }
             
-            // Center of canvas
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const scale = 5;
+            // Clear previous drawings
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Draw spacecraft (center)
-            ctx.fillStyle = '#64b5f6';
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 12px Arial';
-            ctx.fillText('ORION', centerX - 25, centerY - 15);
-            
-            // Draw objects and trajectories
-            vizData.objects.forEach((obj, idx) => {
-                const pos = obj.position;
-                const relX = (pos[0] - vizData.spacecraft[0]) * scale;
-                const relY = (pos[1] - vizData.spacecraft[1]) * scale;
-                const x = centerX + relX;
-                const y = centerY + relY;
+            detections.forEach(detection => {
+                const boxX = detection.x * canvas.width;
+                const boxY = detection.y * canvas.height;
+                const boxW = detection.size * canvas.width;
+                const boxH = detection.size * canvas.height;
                 
-                // Draw trajectory
-                if (obj.trajectory && obj.trajectory.length > 0) {
-                    ctx.strokeStyle = 'rgba(100, 181, 246, 0.3)';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    obj.trajectory.forEach(traj => {
-                        const trajX = centerX + (traj.position[0] - vizData.spacecraft[0]) * scale;
-                        const trajY = centerY + (traj.position[1] - vizData.spacecraft[1]) * scale;
-                        ctx.lineTo(trajX, trajY);
-                    });
-                    ctx.stroke();
-                }
+                // Draw bounding box
+                ctx.strokeStyle = '#00e5ff';
+                ctx.lineWidth = 3;
+                ctx.strokeRect(boxX - boxW/2, boxY - boxH/2, boxW, boxH);
                 
-                // Draw object
-                let color;
-                if (obj.risk_level === 'CRITICAL') {
-                    color = '#e53935';
-                } else if (obj.risk_level === 'HIGH') {
-                    color = '#fb8c00';
-                } else if (obj.risk_level === 'MEDIUM') {
-                    color = '#fdd835';
-                } else {
-                    color = '#43a047';
-                }
+                // Draw corner markers
+                const cornerSize = 15;
+                ctx.strokeStyle = '#ff0000';
+                ctx.lineWidth = 4;
                 
-                ctx.fillStyle = color;
+                // Top-left corner
                 ctx.beginPath();
-                ctx.arc(x, y, 5, 0, Math.PI * 2);
-                ctx.fill();
+                ctx.moveTo(boxX - boxW/2, boxY - boxH/2 + cornerSize);
+                ctx.lineTo(boxX - boxW/2, boxY - boxH/2);
+                ctx.lineTo(boxX - boxW/2 + cornerSize, boxY - boxH/2);
+                ctx.stroke();
                 
-                // Draw label
-                ctx.fillStyle = '#fff';
-                ctx.font = '10px Arial';
-                ctx.fillText(obj.id, x + 8, y + 4);
+                // Top-right corner
+                ctx.beginPath();
+                ctx.moveTo(boxX + boxW/2 - cornerSize, boxY - boxH/2);
+                ctx.lineTo(boxX + boxW/2, boxY - boxH/2);
+                ctx.lineTo(boxX + boxW/2, boxY - boxH/2 + cornerSize);
+                ctx.stroke();
+                
+                // Bottom-left corner
+                ctx.beginPath();
+                ctx.moveTo(boxX - boxW/2, boxY + boxH/2 - cornerSize);
+                ctx.lineTo(boxX - boxW/2, boxY + boxH/2);
+                ctx.lineTo(boxX - boxW/2 + cornerSize, boxY + boxH/2);
+                ctx.stroke();
+                
+                // Bottom-right corner
+                ctx.beginPath();
+                ctx.moveTo(boxX + boxW/2 - cornerSize, boxY + boxH/2);
+                ctx.lineTo(boxX + boxW/2, boxY + boxH/2);
+                ctx.lineTo(boxX + boxW/2, boxY + boxH/2 - cornerSize);
+                ctx.stroke();
+                
+                // Draw label background
+                const label = `${detection.id} (${(detection.confidence * 100).toFixed(0)}%)`;
+                ctx.font = 'bold 14px Arial';
+                const textMetrics = ctx.measureText(label);
+                const textHeight = 20;
+                
+                ctx.fillStyle = 'rgba(0, 229, 255, 0.8)';
+                ctx.fillRect(boxX - boxW/2, boxY - boxH/2 - textHeight - 5, textMetrics.width + 10, textHeight);
+                
+                // Draw label text
+                ctx.fillStyle = '#000';
+                ctx.fillText(label, boxX - boxW/2 + 5, boxY - boxH/2 - 10);
+                
+                // Draw distance indicator (simulated)
+                const distance = ((1 - detection.size) * MAX_DISTANCE_KM).toFixed(1);
+                const distLabel = `${distance} km`;
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.font = '12px Arial';
+                ctx.fillText(distLabel, boxX - boxW/2 + 5, boxY + boxH/2 + 15);
             });
-            
-            // Draw safety zone
-            ctx.strokeStyle = 'rgba(100, 181, 246, 0.3)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 5 * scale, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
         }
         
-        // Auto-run safe scenario on load
+        function updateDashboardFromDetections(detections) {
+            // Convert camera detections to dashboard data format
+            const objects = detections.map(det => {
+                const distance = (1 - det.size) * MAX_DISTANCE_KM; // Simulate distance based on size
+                let riskLevel = 'LOW';
+                let riskClass = 'safe';
+                
+                if (distance < 5) {
+                    riskLevel = 'CRITICAL';
+                    riskClass = 'critical';
+                } else if (distance < 10) {
+                    riskLevel = 'HIGH';
+                    riskClass = 'warning';
+                } else if (distance < 20) {
+                    riskLevel = 'MEDIUM';
+                    riskClass = 'warning';
+                }
+                
+                return {
+                    id: det.id,
+                    type: det.type,
+                    distance: distance,
+                    risk_level: riskLevel,
+                    position: [det.x * 100 - 50, det.y * 100 - 50, distance],
+                    velocity: [det.velocity.x * 100, det.velocity.y * 100, -2],
+                    size: det.size * 10,
+                    detection_confidence: det.confidence
+                };
+            });
+            
+            // Calculate summary stats
+            const criticalObjects = objects.filter(o => o.risk_level === 'CRITICAL').length;
+            const highRiskObjects = objects.filter(o => o.risk_level === 'HIGH').length;
+            const maneuverRequired = criticalObjects > 0 || highRiskObjects > 0;
+            
+            // Update summary panel
+            document.getElementById('total-objects').textContent = objects.length;
+            document.getElementById('critical-objects').textContent = criticalObjects;
+            document.getElementById('high-risk-objects').textContent = highRiskObjects;
+            
+            const statusEl = document.getElementById('system-status');
+            if (maneuverRequired) {
+                statusEl.textContent = 'ALERT';
+                statusEl.className = 'stat-value critical';
+            } else {
+                statusEl.textContent = 'OK';
+                statusEl.className = 'stat-value safe';
+            }
+            
+            // Update decision panel
+            const decisionTitle = document.getElementById('decision-title');
+            const decisionContent = document.getElementById('decision-content');
+            
+            if (maneuverRequired && objects.length > 0) {
+                decisionTitle.textContent = 'EXECUTE_AVOIDANCE';
+                decisionContent.textContent = `Critical threat detected via camera feed at ${objects[0].distance.toFixed(2)} km. Autonomous avoidance maneuver required to ensure spacecraft safety.`;
+            } else {
+                decisionTitle.textContent = 'MAINTAIN_COURSE';
+                decisionContent.textContent = 'All detected objects via camera feed are at safe distances. No immediate threats identified. Continue nominal operations.';
+            }
+            
+            // Update objects table
+            const tbody = document.getElementById('objects-tbody');
+            tbody.innerHTML = '';
+            objects.forEach(obj => {
+                const row = tbody.insertRow();
+                row.innerHTML = `
+                    <td>${obj.id}</td>
+                    <td>${obj.type}</td>
+                    <td>${obj.distance.toFixed(2)}</td>
+                    <td><span class="risk-badge risk-${obj.risk_level.toLowerCase()}">${obj.risk_level}</span></td>
+                `;
+            });
+            
+            // Update maneuver details
+            const threatDistance = (maneuverRequired && objects.length > 0) ? objects[0].distance : 0;
+            const maneuverHtml = `
+                <div class="maneuver-param">
+                    <span class="param-label">Maneuver Type:</span>
+                    <span class="param-value">${maneuverRequired ? 'AVOIDANCE_BURN' : 'NONE'}</span>
+                </div>
+                <div class="maneuver-param">
+                    <span class="param-label">Delta-V:</span>
+                    <span class="param-value">${maneuverRequired ? (0.05 * (1 - threatDistance / MAX_DISTANCE_KM)).toFixed(3) : '0.000'} km/s</span>
+                </div>
+                <div class="maneuver-param">
+                    <span class="param-label">Burn Duration:</span>
+                    <span class="param-value">${maneuverRequired ? '30' : '0'} seconds</span>
+                </div>
+                <div class="maneuver-param">
+                    <span class="param-label">Fuel Cost:</span>
+                    <span class="param-value">${maneuverRequired ? (5.0 * (1 - threatDistance / MAX_DISTANCE_KM)).toFixed(2) : '0.00'} kg</span>
+                </div>
+                ${maneuverRequired ? `
+                <div class="maneuver-param">
+                    <span class="param-label">Success Probability:</span>
+                    <span class="param-value">95.0%</span>
+                </div>
+                ` : ''}
+            `;
+            document.getElementById('maneuver-details').innerHTML = maneuverHtml;
+            
+            // Update logs
+            const timestamp = new Date().toISOString();
+            const logs = [
+                { timestamp: timestamp, message: `Camera detected ${objects.length} object(s) in field of view` },
+                { timestamp: timestamp, message: `Risk assessment: ${criticalObjects} critical, ${highRiskObjects} high risk` },
+                { timestamp: timestamp, message: `Decision: ${maneuverRequired ? 'EXECUTE_AVOIDANCE' : 'MAINTAIN_COURSE'}` }
+            ];
+            
+            const logsHtml = logs.map(log => `
+                <div class="log-entry">
+                    <span class="log-timestamp">[${new Date(log.timestamp).toLocaleTimeString()}]</span>
+                    <span>${log.message}</span>
+                </div>
+            `).join('');
+            document.getElementById('xai-logs').innerHTML = logsHtml;
+            
+            // Show results section
+            document.getElementById('results').style.display = 'block';
+        }
+        
+        // Auto-run safe scenario on load - disabled for webcam mode
         window.onload = function() {
-            setTimeout(() => runSimulation('safe'), 1000);
+            // Webcam mode: user must manually start camera detection
+            // Original simulation scenarios still available via buttons
         };
     </script>
 </body>

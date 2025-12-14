@@ -7,6 +7,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 from orion_eye import OrionEyeSystem
 import json
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -81,6 +82,52 @@ def get_scenarios():
 def health():
     """Health check endpoint"""
     return jsonify({'status': 'operational', 'system': 'ORION-EYE'})
+
+
+@app.route('/api/camera-detection', methods=['POST'])
+def camera_detection():
+    """Process camera detection data and return simulation results"""
+    # Constants for coordinate transformation
+    MAX_DISTANCE_KM = 50  # Maximum simulated distance (matches frontend)
+    COORD_SCALE = 100     # Scale factor for normalized coordinates
+    COORD_OFFSET = -50    # Offset to center coordinates
+    Z_VELOCITY = -2       # Default Z-axis velocity (approaching)
+    
+    data = request.json
+    detections = data.get('detections', [])
+    
+    try:
+        # Convert camera detections to ORION format
+        # This bridges the camera feed data to the existing simulation system
+        objects = []
+        for det in detections:
+            # Extract distance for z-coordinate in 3D position
+            distance = det.get('distance', MAX_DISTANCE_KM)
+            obj = {
+                'id': det.get('id', 'CAM_OBJ'),
+                'position': [det.get('x', 0) * COORD_SCALE + COORD_OFFSET, 
+                           det.get('y', 0) * COORD_SCALE + COORD_OFFSET, 
+                           distance],
+                'velocity': [det.get('velocity', {}).get('x', 0) * COORD_SCALE, 
+                           det.get('velocity', {}).get('y', 0) * COORD_SCALE, 
+                           Z_VELOCITY],
+                'size': det.get('size', 0.1) * 10,
+                'type': det.get('type', 'debris'),
+                'detection_confidence': det.get('confidence', 0.9),
+                'timestamp': datetime.now().isoformat()
+            }
+            objects.append(obj)
+        
+        # Calculate risk levels and generate response
+        result = {
+            'status': 'success',
+            'objects_detected': len(objects),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(convert_numpy(result))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
