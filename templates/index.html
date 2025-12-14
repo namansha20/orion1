@@ -678,99 +678,11 @@
             `;
             document.getElementById('leo-impact').innerHTML = leoHtml;
             
-            // Render 3D visualization
-            render3DVisualization(data.dashboard_data.visualization);
+            // Note: 3D visualization removed in favor of webcam feed
+            // Original simulation data still available in dashboard panels
         }
         
-        function render3DVisualization(vizData) {
-            const canvas = document.getElementById('space-canvas');
-            const ctx = canvas.getContext('2d');
-            canvas.width = canvas.offsetWidth;
-            canvas.height = canvas.offsetHeight;
-            
-            // Clear canvas
-            ctx.fillStyle = '#000';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw stars
-            for (let i = 0; i < 100; i++) {
-                ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.5 + 0.3})`;
-                ctx.fillRect(
-                    Math.random() * canvas.width,
-                    Math.random() * canvas.height,
-                    2, 2
-                );
-            }
-            
-            // Center of canvas
-            const centerX = canvas.width / 2;
-            const centerY = canvas.height / 2;
-            const scale = 5;
-            
-            // Draw spacecraft (center)
-            ctx.fillStyle = '#64b5f6';
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 8, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = '#fff';
-            ctx.font = 'bold 12px Arial';
-            ctx.fillText('ORION', centerX - 25, centerY - 15);
-            
-            // Draw objects and trajectories
-            vizData.objects.forEach((obj, idx) => {
-                const pos = obj.position;
-                const relX = (pos[0] - vizData.spacecraft[0]) * scale;
-                const relY = (pos[1] - vizData.spacecraft[1]) * scale;
-                const x = centerX + relX;
-                const y = centerY + relY;
-                
-                // Draw trajectory
-                if (obj.trajectory && obj.trajectory.length > 0) {
-                    ctx.strokeStyle = 'rgba(100, 181, 246, 0.3)';
-                    ctx.lineWidth = 1;
-                    ctx.beginPath();
-                    ctx.moveTo(x, y);
-                    obj.trajectory.forEach(traj => {
-                        const trajX = centerX + (traj.position[0] - vizData.spacecraft[0]) * scale;
-                        const trajY = centerY + (traj.position[1] - vizData.spacecraft[1]) * scale;
-                        ctx.lineTo(trajX, trajY);
-                    });
-                    ctx.stroke();
-                }
-                
-                // Draw object
-                let color;
-                if (obj.risk_level === 'CRITICAL') {
-                    color = '#e53935';
-                } else if (obj.risk_level === 'HIGH') {
-                    color = '#fb8c00';
-                } else if (obj.risk_level === 'MEDIUM') {
-                    color = '#fdd835';
-                } else {
-                    color = '#43a047';
-                }
-                
-                ctx.fillStyle = color;
-                ctx.beginPath();
-                ctx.arc(x, y, 5, 0, Math.PI * 2);
-                ctx.fill();
-                
-                // Draw label
-                ctx.fillStyle = '#fff';
-                ctx.font = '10px Arial';
-                ctx.fillText(obj.id, x + 8, y + 4);
-            });
-            
-            // Draw safety zone
-            ctx.strokeStyle = 'rgba(100, 181, 246, 0.3)';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.beginPath();
-            ctx.arc(centerX, centerY, 5 * scale, 0, Math.PI * 2);
-            ctx.stroke();
-            ctx.setLineDash([]);
-        }
-        
+
         // Webcam and Detection System - Constants
         const DETECTION_INTERVAL_MS = 100; // 10fps detection rate
         const DETECTION_SIZE_INCREMENT = 0.003; // Growth rate for approaching objects
@@ -1028,7 +940,7 @@
             const decisionTitle = document.getElementById('decision-title');
             const decisionContent = document.getElementById('decision-content');
             
-            if (maneuverRequired) {
+            if (maneuverRequired && objects.length > 0) {
                 decisionTitle.textContent = 'EXECUTE_AVOIDANCE';
                 decisionContent.textContent = `Critical threat detected via camera feed at ${objects[0].distance.toFixed(2)} km. Autonomous avoidance maneuver required to ensure spacecraft safety.`;
             } else {
@@ -1050,6 +962,7 @@
             });
             
             // Update maneuver details
+            const threatDistance = (maneuverRequired && objects.length > 0) ? objects[0].distance : 0;
             const maneuverHtml = `
                 <div class="maneuver-param">
                     <span class="param-label">Maneuver Type:</span>
@@ -1057,7 +970,7 @@
                 </div>
                 <div class="maneuver-param">
                     <span class="param-label">Delta-V:</span>
-                    <span class="param-value">${maneuverRequired ? (0.05 * (1 - objects[0].distance / MAX_DISTANCE_KM)).toFixed(3) : '0.000'} km/s</span>
+                    <span class="param-value">${maneuverRequired ? (0.05 * (1 - threatDistance / MAX_DISTANCE_KM)).toFixed(3) : '0.000'} km/s</span>
                 </div>
                 <div class="maneuver-param">
                     <span class="param-label">Burn Duration:</span>
@@ -1065,7 +978,7 @@
                 </div>
                 <div class="maneuver-param">
                     <span class="param-label">Fuel Cost:</span>
-                    <span class="param-value">${maneuverRequired ? (5.0 * (1 - objects[0].distance / MAX_DISTANCE_KM)).toFixed(2) : '0.00'} kg</span>
+                    <span class="param-value">${maneuverRequired ? (5.0 * (1 - threatDistance / MAX_DISTANCE_KM)).toFixed(2) : '0.00'} kg</span>
                 </div>
                 ${maneuverRequired ? `
                 <div class="maneuver-param">
