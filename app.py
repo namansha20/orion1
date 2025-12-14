@@ -7,6 +7,7 @@ from flask import Flask, render_template, jsonify, request
 from flask_cors import CORS
 from orion_eye import OrionEyeSystem
 import json
+from datetime import datetime
 
 app = Flask(__name__)
 CORS(app)
@@ -81,6 +82,42 @@ def get_scenarios():
 def health():
     """Health check endpoint"""
     return jsonify({'status': 'operational', 'system': 'ORION-EYE'})
+
+
+@app.route('/api/camera-detection', methods=['POST'])
+def camera_detection():
+    """Process camera detection data and return simulation results"""
+    data = request.json
+    detections = data.get('detections', [])
+    
+    try:
+        # Convert camera detections to ORION format
+        # This bridges the camera feed data to the existing simulation system
+        objects = []
+        for det in detections:
+            distance = det.get('distance', 50)
+            obj = {
+                'id': det.get('id', 'CAM_OBJ'),
+                'position': [det.get('x', 0) * 100 - 50, det.get('y', 0) * 100 - 50, distance],
+                'velocity': [det.get('velocity', {}).get('x', 0) * 100, 
+                           det.get('velocity', {}).get('y', 0) * 100, -2],
+                'size': det.get('size', 0.1) * 10,
+                'type': det.get('type', 'debris'),
+                'detection_confidence': det.get('confidence', 0.9),
+                'timestamp': datetime.now().isoformat()
+            }
+            objects.append(obj)
+        
+        # Calculate risk levels and generate response
+        result = {
+            'status': 'success',
+            'objects_detected': len(objects),
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return jsonify(convert_numpy(result))
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == '__main__':
