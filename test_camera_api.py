@@ -46,9 +46,11 @@ RATIO_MAX = 1.60
 EXPOSURE_VAL = -5.0      
 
 def calculate_dynamics(pos_history, radius_history):
-    # Need at least 2*VELOCITY_CALC_FRAMES to avoid overlap in growth rate calculation
-    min_frames = VELOCITY_CALC_FRAMES * 2
-    if len(pos_history) < VELOCITY_CALC_FRAMES or len(radius_history) < min_frames:
+    # Different requirements for velocity vs growth rate:
+    # - Velocity needs VELOCITY_CALC_FRAMES consecutive frames
+    # - Growth rate needs 2*VELOCITY_CALC_FRAMES to avoid overlap (recent vs old)
+    min_frames_for_growth = VELOCITY_CALC_FRAMES * 2
+    if len(pos_history) < VELOCITY_CALC_FRAMES or len(radius_history) < min_frames_for_growth:
         return (0, 0), 0
     
     # Calculate velocity using more frames for stability
@@ -120,6 +122,8 @@ def main():
         target_found = False
         
         # --- 1. AI DETECTION & STABILIZATION ---
+        # Note: Processes all detected objects, uses last valid one for tracking
+        # Original design tracks single object (most recent valid detection)
         for r in results:
             boxes = r.boxes
             for box in boxes:
