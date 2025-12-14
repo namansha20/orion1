@@ -271,24 +271,30 @@ ORION-EYE includes comprehensive LEO environmental impact assessment:
 - **Historical Data Analysis:** Learn from past encounters
 - **Real Sensor Integration:** Connect to actual spacecraft sensors
 
-## 📹 Real-Time Camera Object Detection
+## 📹 Real-Time Webcam Detection with AR Overlays
 
-ORION now includes **AADES** (Autonomous Avoidance and Detection System) - a real-time camera-based object detection and tracking system.
+ORION-EYE now features a **Real-Time Webcam Feed with AR Overlays** that replaces the simulated 3D space environment with live camera detection.
 
 ### Features
-- **Real-time object tracking** with OpenCV
-- **Red object detection** with configurable HSV color ranges
-- **3D motion analysis** (X, Y, Z axes)
-- **Collision prediction** with visual warnings
-- **Trajectory visualization** with trailing effects
-- **HUD interface** with status indicators
-- **Web-based live camera preview** integrated in the dashboard
+- **Live webcam feed** using browser's getUserMedia API
+- **AR overlay canvas** for drawing bounding boxes and ID tags
+- **HUD-style interface** with cyan borders and corner reticles
+- **Mock detection system** simulating approaching debris
+- **Real-time dashboard updates** based on camera detections
+- **Integrated state management** - detection data flows to all panels
+- **Sci-fi aesthetic** with satellite HUD styling
 
-### Running Camera Detection
+### How It Works
 
-**Option 1: Integrated Web Dashboard (Recommended)**
+The new webcam system integrates seamlessly with ORION-EYE's existing architecture:
 
-Access the live camera detection preview directly from the web dashboard:
+1. **Camera Feed**: Live video stream from your webcam
+2. **Detection Layer**: Placeholder `runDetectionLoop()` function (ready for YOLO/TensorFlow.js integration)
+3. **AR Overlays**: Canvas layer draws bounding boxes, labels, and distance indicators
+4. **Data Bridge**: Detection data (x, y, size, object_type) flows to Redux/State store
+5. **Dashboard Sync**: Risk Assessment, Maneuver Planning, and System Status panels update automatically
+
+### Usage
 
 1. Start the web application:
 ```bash
@@ -297,45 +303,76 @@ python app.py
 
 2. Open your browser and navigate to `http://localhost:5000`
 
-3. Click the **"📹 Start Live Camera Detection"** button
+3. Click the **"📹 Start Webcam Detection"** button
 
-4. The camera preview will appear with real-time debris detection overlay
+4. Grant camera permissions when prompted
 
-**Option 2: Standalone Camera Application**
+5. Hold an object in front of the camera to see:
+   - Bounding box with corner reticles
+   - Object ID and confidence percentage
+   - Distance estimation
+   - System Status panel showing threat level
+   - Maneuver Planning panel calculating avoidance
+   - Risk Assessment updating in real-time
+
+### Mock Detection System
+
+The current implementation uses mock detections that simulate:
+- Object approaching (growing bounding box size)
+- Distance calculation based on apparent size
+- Risk level assessment (CRITICAL < 5km, HIGH < 10km, MEDIUM < 20km, LOW ≥ 20km)
+- Velocity vectors and movement patterns
+
+**Integration Point**: Replace `runDetectionLoop()` function in `templates/index.html` with YOLO/TensorFlow.js model for real object detection.
+
+### API Endpoint
+
+New endpoint for ML model integration:
 
 ```bash
-# Run the camera detection system
-python camera_detection.py
+POST /api/camera-detection
+Content-Type: application/json
+
+{
+  "detections": [
+    {
+      "id": "DEBRIS_001",
+      "type": "debris",
+      "x": 0.3,
+      "y": 0.4,
+      "size": 0.15,
+      "distance": 8.5,
+      "velocity": {"x": 0.002, "y": 0.001},
+      "confidence": 0.92
+    }
+  ]
+}
 ```
 
-**Controls:**
-- Press `q` to quit the application
-
-**Configuration:**
-You can adjust detection parameters in `camera_detection.py`:
-- `LOWER_RED1`, `UPPER_RED1`, `LOWER_RED2`, `UPPER_RED2`: HSV color ranges for red object detection
-- `BUFFER_SIZE`: Length of the trajectory trail (default: 32)
-- `COLLISION_ZONE`: Radius of collision detection zone in pixels (default: 80)
-- `GROWTH_THRESHOLD`: Sensitivity for approaching/receding detection (default: 0.5)
-
 **Requirements:**
-- Webcam or camera device
-- OpenCV Python (opencv-python)
+- Modern web browser with camera support
+- Camera permissions granted to the website
 
 ## 🧪 Testing
 
 Run the system with different scenarios:
 
 ```bash
-# Test individual layers
+# Test all demo scenarios
+python test_demos.py
+
+# Test camera detection API (requires server running)
+python test_camera_api.py
+
+# Run individual layer tests
 python orion_eye.py
-
-# Test web server
-python app.py
-
-# Test camera detection
-python camera_detection.py
 ```
+
+To test the webcam interface:
+1. Start the server: `python app.py`
+2. Open browser: `http://localhost:5000`
+3. Click "Start Webcam Detection" button
+4. Hold an object in front of camera to test detection and dashboard updates
 
 ## 📝 License
 
