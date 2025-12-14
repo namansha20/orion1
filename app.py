@@ -87,6 +87,9 @@ def health():
 @app.route('/api/camera-detection', methods=['POST'])
 def camera_detection():
     """Process camera detection data and return simulation results"""
+    # Maximum simulated distance in kilometers (matches frontend constant)
+    MAX_DISTANCE_KM = 50
+    
     data = request.json
     detections = data.get('detections', [])
     
@@ -95,7 +98,7 @@ def camera_detection():
         # This bridges the camera feed data to the existing simulation system
         objects = []
         for det in detections:
-            distance = det.get('distance', 50)
+            distance = det.get('distance', MAX_DISTANCE_KM)
             obj = {
                 'id': det.get('id', 'CAM_OBJ'),
                 'position': [det.get('x', 0) * 100 - 50, det.get('y', 0) * 100 - 50, distance],
