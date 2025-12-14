@@ -65,16 +65,6 @@ def calculate_dynamics(pos_history, radius_history):
     
     return (dx, dy), growth_rate
 
-def get_direction_label(dx, dy):
-    h_dir = ""
-    v_dir = ""
-    if dx > MOVEMENT_THRESHOLD: h_dir = "RIGHT"
-    elif dx < -MOVEMENT_THRESHOLD: h_dir = "LEFT"
-    if dy > MOVEMENT_THRESHOLD: v_dir = "DOWN"
-    elif dy < -MOVEMENT_THRESHOLD: v_dir = "UP"
-    if h_dir == "" and v_dir == "": return "STATIONARY"
-    return f"{h_dir} {v_dir}".strip()
-
 def main():
     # --- INITIALIZATION ---
     print(f"🔄 SYSTEM BOOT: Loading AI from {MODEL_PATH}...")
