@@ -45,19 +45,6 @@ RATIO_MAX = 1.60
 # 6. CAMERA
 EXPOSURE_VAL = -5.0      
 
-# --- INITIALIZATION ---
-print(f"🔄 SYSTEM BOOT: Loading AI from {MODEL_PATH}...")
-try:
-    model = YOLO(MODEL_PATH)
-    print("✅ AI BRAIN ONLINE.")
-except FileNotFoundError as e:
-    print(f"❌ CRITICAL ERROR: Model file not found at {MODEL_PATH}")
-    print(f"   Please set YOLO_MODEL_PATH environment variable or update MODEL_PATH")
-    sys.exit(1)
-except Exception as e:
-    print(f"❌ CRITICAL ERROR: Could not load model.\n{e}")
-    sys.exit(1)
-
 def calculate_dynamics(pos_history, radius_history):
     # Need at least 2*VELOCITY_CALC_FRAMES to avoid overlap in growth rate calculation
     min_frames = VELOCITY_CALC_FRAMES * 2
@@ -89,6 +76,19 @@ def get_direction_label(dx, dy):
     return f"{h_dir} {v_dir}".strip()
 
 def main():
+    # --- INITIALIZATION ---
+    print(f"🔄 SYSTEM BOOT: Loading AI from {MODEL_PATH}...")
+    try:
+        model = YOLO(MODEL_PATH)
+        print("✅ AI BRAIN ONLINE.")
+    except FileNotFoundError as e:
+        print(f"❌ CRITICAL ERROR: Model file not found at {MODEL_PATH}")
+        print(f"   Please set YOLO_MODEL_PATH environment variable or update MODEL_PATH")
+        sys.exit(1)
+    except Exception as e:
+        print(f"❌ CRITICAL ERROR: Could not load model.\n{e}")
+        sys.exit(1)
+    
     # Try to open camera - use CAP_DSHOW on Windows, default on other platforms
     camera_index = int(os.environ.get('CAMERA_INDEX', 0))
     try:
