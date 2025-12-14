@@ -98,6 +98,7 @@ def camera_detection():
         # This bridges the camera feed data to the existing simulation system
         objects = []
         for det in detections:
+            # Extract distance for z-coordinate in 3D position
             distance = det.get('distance', MAX_DISTANCE_KM)
             obj = {
                 'id': det.get('id', 'CAM_OBJ'),
