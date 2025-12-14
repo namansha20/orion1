@@ -6,6 +6,8 @@ Performs detection using YOLO AI model with stabilized tracking
 
 import cv2
 import numpy as np
+import os
+import sys
 from collections import deque
 from ultralytics import YOLO
 
@@ -13,8 +15,8 @@ from ultralytics import YOLO
 
 # 1. AI MODEL
 # Default path - can be overridden via environment variable YOLO_MODEL_PATH
-import os
-MODEL_PATH = os.environ.get('YOLO_MODEL_PATH', r"D:\test\Find-PaperBalls-1\runs\detect\train3\weights\best.pt")
+# Use 'best.pt' as a generic default that users should replace
+MODEL_PATH = os.environ.get('YOLO_MODEL_PATH', 'best.pt')
 
 # 2. SMOOTHING SETTINGS (TUNED FOR STABILITY)
 # Lower = Smoother but slower. Higher = Faster but jittery.
@@ -50,11 +52,9 @@ try:
 except FileNotFoundError as e:
     print(f"❌ CRITICAL ERROR: Model file not found at {MODEL_PATH}")
     print(f"   Please set YOLO_MODEL_PATH environment variable or update MODEL_PATH")
-    import sys
     sys.exit(1)
 except Exception as e:
     print(f"❌ CRITICAL ERROR: Could not load model.\n{e}")
-    import sys
     sys.exit(1)
 
 def calculate_dynamics(pos_history, radius_history):
@@ -62,12 +62,14 @@ def calculate_dynamics(pos_history, radius_history):
         return (0, 0), 0
     
     # Calculate velocity using more frames for stability
-    dx = int(np.mean([pos_history[i-1][0] - pos_history[i][0] for i in range(1, VELOCITY_CALC_FRAMES)]))
-    dy = int(np.mean([pos_history[i-1][1] - pos_history[i][1] for i in range(1, VELOCITY_CALC_FRAMES)]))
+    # Note: deque uses appendleft, so index 0 is newest, higher indices are older
+    # Velocity = (older_pos - newer_pos) to get correct direction
+    dx = int(np.mean([pos_history[i][0] - pos_history[i-1][0] for i in range(1, VELOCITY_CALC_FRAMES)]))
+    dy = int(np.mean([pos_history[i][1] - pos_history[i-1][1] for i in range(1, VELOCITY_CALC_FRAMES)]))
 
-    # Calculate growth rate: recent (newest) vs old (oldest)
-    r_now = np.mean(list(radius_history)[:VELOCITY_CALC_FRAMES])  # Most recent frames
-    r_old = np.mean(list(radius_history)[-VELOCITY_CALC_FRAMES:])  # Oldest frames
+    # Calculate growth rate: recent (newest at index 0) vs old (oldest at end)
+    r_now = np.mean(list(radius_history)[:VELOCITY_CALC_FRAMES])  # Most recent frames (index 0 to VELOCITY_CALC_FRAMES-1)
+    r_old = np.mean(list(radius_history)[-VELOCITY_CALC_FRAMES:])  # Oldest frames (last VELOCITY_CALC_FRAMES)
     growth_rate = r_now - r_old 
     
     return (dx, dy), growth_rate
@@ -96,7 +98,6 @@ def main():
     
     if not cap.isOpened():
         print(f"❌ ERROR: Could not open camera at index {camera_index}")
-        import sys
         sys.exit(1)
     
     cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25) 
