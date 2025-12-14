@@ -87,8 +87,11 @@ def health():
 @app.route('/api/camera-detection', methods=['POST'])
 def camera_detection():
     """Process camera detection data and return simulation results"""
-    # Maximum simulated distance in kilometers (matches frontend constant)
-    MAX_DISTANCE_KM = 50
+    # Constants for coordinate transformation
+    MAX_DISTANCE_KM = 50  # Maximum simulated distance (matches frontend)
+    COORD_SCALE = 100     # Scale factor for normalized coordinates
+    COORD_OFFSET = -50    # Offset to center coordinates
+    Z_VELOCITY = -2       # Default Z-axis velocity (approaching)
     
     data = request.json
     detections = data.get('detections', [])
@@ -102,9 +105,12 @@ def camera_detection():
             distance = det.get('distance', MAX_DISTANCE_KM)
             obj = {
                 'id': det.get('id', 'CAM_OBJ'),
-                'position': [det.get('x', 0) * 100 - 50, det.get('y', 0) * 100 - 50, distance],
-                'velocity': [det.get('velocity', {}).get('x', 0) * 100, 
-                           det.get('velocity', {}).get('y', 0) * 100, -2],
+                'position': [det.get('x', 0) * COORD_SCALE + COORD_OFFSET, 
+                           det.get('y', 0) * COORD_SCALE + COORD_OFFSET, 
+                           distance],
+                'velocity': [det.get('velocity', {}).get('x', 0) * COORD_SCALE, 
+                           det.get('velocity', {}).get('y', 0) * COORD_SCALE, 
+                           Z_VELOCITY],
                 'size': det.get('size', 0.1) * 10,
                 'type': det.get('type', 'debris'),
                 'detection_confidence': det.get('confidence', 0.9),
