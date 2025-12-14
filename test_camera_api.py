@@ -12,7 +12,9 @@ from ultralytics import YOLO
 # --- CONFIGURATION ---
 
 # 1. AI MODEL
-MODEL_PATH = r"D:\test\Find-PaperBalls-1\runs\detect\train3\weights\best.pt"
+# Default path - can be overridden via environment variable YOLO_MODEL_PATH
+import os
+MODEL_PATH = os.environ.get('YOLO_MODEL_PATH', r"D:\test\Find-PaperBalls-1\runs\detect\train3\weights\best.pt")
 
 # 2. SMOOTHING SETTINGS (TUNED FOR STABILITY)
 # Lower = Smoother but slower. Higher = Faster but jittery.
@@ -28,7 +30,8 @@ BUFFER_SIZE = 32
 PREDICTION_FRAMES = 15   
 COLLISION_ZONE = 80      
 GROWTH_THRESHOLD = 0.5   
-MOVEMENT_THRESHOLD = 2   
+MOVEMENT_THRESHOLD = 2
+VELOCITY_CALC_FRAMES = 5  # Number of frames to use for velocity calculation
 
 # 5. ANTI-FLICKER
 MAX_COAST_FRAMES = 10     
@@ -44,20 +47,27 @@ print(f"🔄 SYSTEM BOOT: Loading AI from {MODEL_PATH}...")
 try:
     model = YOLO(MODEL_PATH)
     print("✅ AI BRAIN ONLINE.")
+except FileNotFoundError as e:
+    print(f"❌ CRITICAL ERROR: Model file not found at {MODEL_PATH}")
+    print(f"   Please set YOLO_MODEL_PATH environment variable or update MODEL_PATH")
+    import sys
+    sys.exit(1)
 except Exception as e:
     print(f"❌ CRITICAL ERROR: Could not load model.\n{e}")
-    exit()
+    import sys
+    sys.exit(1)
 
 def calculate_dynamics(pos_history, radius_history):
-    if len(pos_history) < 5 or len(radius_history) < 5:
+    if len(pos_history) < VELOCITY_CALC_FRAMES or len(radius_history) < VELOCITY_CALC_FRAMES:
         return (0, 0), 0
     
     # Calculate velocity using more frames for stability
-    dx = int(np.mean([pos_history[i-1][0] - pos_history[i][0] for i in range(1, 5)]))
-    dy = int(np.mean([pos_history[i-1][1] - pos_history[i][1] for i in range(1, 5)]))
+    dx = int(np.mean([pos_history[i-1][0] - pos_history[i][0] for i in range(1, VELOCITY_CALC_FRAMES)]))
+    dy = int(np.mean([pos_history[i-1][1] - pos_history[i][1] for i in range(1, VELOCITY_CALC_FRAMES)]))
 
-    r_now = np.mean(list(radius_history)[:5]) 
-    r_old = np.mean(list(radius_history)[-5:])
+    # Calculate growth rate: recent (newest) vs old (oldest)
+    r_now = np.mean(list(radius_history)[:VELOCITY_CALC_FRAMES])  # Most recent frames
+    r_old = np.mean(list(radius_history)[-VELOCITY_CALC_FRAMES:])  # Oldest frames
     growth_rate = r_now - r_old 
     
     return (dx, dy), growth_rate
@@ -73,7 +83,22 @@ def get_direction_label(dx, dy):
     return f"{h_dir} {v_dir}".strip()
 
 def main():
-    cap = cv2.VideoCapture(0, cv2.CAP_DSHOW)
+    # Try to open camera - use CAP_DSHOW on Windows, default on other platforms
+    camera_index = int(os.environ.get('CAMERA_INDEX', 0))
+    try:
+        import platform
+        if platform.system() == 'Windows':
+            cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
+        else:
+            cap = cv2.VideoCapture(camera_index)
+    except Exception:
+        cap = cv2.VideoCapture(camera_index)
+    
+    if not cap.isOpened():
+        print(f"❌ ERROR: Could not open camera at index {camera_index}")
+        import sys
+        sys.exit(1)
+    
     cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25) 
     cap.set(cv2.CAP_PROP_EXPOSURE, EXPOSURE_VAL) 
     
